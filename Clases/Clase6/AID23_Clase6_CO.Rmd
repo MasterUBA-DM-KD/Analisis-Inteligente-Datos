@@ -1,0 +1,553 @@
+---
+title: "AID Clase 6"
+author: "Cecilia Oliva"
+date: "06/05/2023"
+output:
+   html_document:
+     toc: yes
+     code_folding: show
+     toc_float: yes
+     df_print: paged
+     theme: united
+     code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+<br>
+<br>
+
+# Métodos no supervisados
+
+<br>
+<br>
+
+## <span style="color:darkred">Reglas de asociación</span>
+
+<br>
+
+**Ejemplo:** utilizamos el data set del repositorio UCI "AdultUCI". R cuenta con una versión de los datos de clase transacciones para utilizar bajo el paquete arules, con el nombre "Adult".  
+
+```{r echo=TRUE}
+library(arules)
+data(AdultUCI)
+class(AdultUCI)
+str(AdultUCI)
+dim(AdultUCI)
+```
+<br>
+
+El detalle de las 15 variables se pueden ver con el comando **??AdultUCI**.
+
+<br>
+
+**age**
+
+a numeric vector.
+
+**workclass**
+
+a factor with levels Federal-gov, Local-gov, Never-worked, Private, Self-emp-inc, Self-emp-not-inc, State-gov, and Without-pay.
+
+**education**
+
+an ordered factor with levels Preschool < ⁠1st-4th⁠ < ⁠5th-6th⁠ < ⁠7th-8th⁠ < ⁠9th⁠ < ⁠10th⁠ < ⁠11th⁠ < ⁠12th⁠ < HS-grad < Prof-school < Assoc-acdm < Assoc-voc < Some-college < Bachelors < Masters < Doctorate.
+
+**education-num**
+
+a numeric vector.
+
+**marital-status**
+
+a factor with levels Divorced, Married-AF-spouse, Married-civ-spouse, Married-spouse-absent, Never-married, Separated, and Widowed.
+
+**occupation**
+
+a factor with levels Adm-clerical, Armed-Forces, Craft-repair, Exec-managerial, Farming-fishing, Handlers-cleaners, Machine-op-inspct, Other-service, Priv-house-serv, Prof-specialty, Protective-serv, Sales, Tech-support, and Transport-moving.
+
+**relationship**
+
+a factor with levels Husband, ⁠Not-in-family⁠, Other-relative, Own-child, Unmarried, and Wife.
+
+**race**
+
+a factor with levels Amer-Indian-Eskimo, Asian-Pac-Islander, Black, Other, and White.
+
+**sex**
+
+a factor with levels Female and Male.
+
+**capital-gain**
+
+a numeric vector.
+
+**capital-loss**
+
+a numeric vector.
+
+**fnlwgt**
+
+a numeric vector.
+
+**hours-per-week**
+
+a numeric vector.
+
+**native-country**
+
+a factor with levels Cambodia, Canada, China, Columbia, Cuba, Dominican-Republic, Ecuador, El-Salvador, England, France, Germany, Greece, Guatemala, Haiti, Holand-Netherlands, Honduras, Hong, Hungary, India, Iran, Ireland, Italy, Jamaica, Japan, Laos, Mexico, Nicaragua, Outlying-US(Guam-USVI-etc), Peru, Philippines, Poland, Portugal, Puerto-Rico, Scotland, South, Taiwan, Thailand, Trinadad&Tobago, United-States, Vietnam, and Yugoslavia.
+
+**income**
+
+an ordered factor with levels small < large.
+
+
+<br>
+<br>
+
+La base de datos fue extraída de un censo de 1994 y fue originalmente utilizada para predecir si los ingresos excedían USD 50000 al año. Para obtener la base transformada "Adult" en un objeto de clase "transactions" se realizaron las siguientes operaciones:
+
+<br>
+
+-# remove attributes
+
+AdultUCI[["fnlwgt"]] <- NULL
+
+AdultUCI[["education-num"]] <- NULL
+
+-# map metric attributes
+
+AdultUCI[["age"]] <- ordered(cut(AdultUCI[["age"]], c(15, 25, 45, 65, 100)),
+  labels = c("Young", "Middle-aged", "Senior", "Old"))
+
+AdultUCI[["hours-per-week"]] <- ordered(cut(AdultUCI[["hours-per-week"]],
+  c(0,25,40,60,168)),
+  labels = c("Part-time", "Full-time", "Over-time", "Workaholic"))
+
+AdultUCI[["capital-gain"]] <- ordered(cut(AdultUCI[["capital-gain"]],
+  c(-Inf,0,median(AdultUCI[["capital-gain"]][AdultUCI[["capital-gain"]] > 0]),
+  Inf)), labels = c("None", "Low", "High"))
+
+AdultUCI[["capital-loss"]] <- ordered(cut(AdultUCI[["capital-loss"]],
+  c(-Inf,0, median(AdultUCI[["capital-loss"]][AdultUCI[["capital-loss"]] > 0]),
+  Inf)), labels = c("None", "Low", "High"))
+
+-# create transactions
+
+Adult <- transactions(AdultUCI)
+
+
+<br>
+
+<br>
+```{r echo=TRUE}
+data(Adult)
+class(Adult)
+str(Adult)
+dim(Adult)
+colnames(Adult)
+```
+<br>
+
+```{r echo=TRUE}
+inspect(Adult[1:5])
+```
+
+<br>
+
+Para que se visualice mejor:
+
+```{r echo=TRUE}
+df_transac <- as(Adult, Class = "data.frame") 
+library(tidyverse)
+as_tibble(df_transac) %>% head()
+```
+
+<br>
+
+#### Frecuencia de items
+
+Calculamos primero la distribución de la cantidad de items por transacción. 
+```{r echo=TRUE}
+cant_items<- size(Adult) 
+summary(cant_items)
+```
+
+<br>
+
+Se puede calcular la frecuencia de cada ítem de forma relativa o absoluta:
+
+
+```{r echo=TRUE}
+frecuencia_items <- itemFrequency(x = Adult, type = "relative") 
+frecuencia_items %>% sort(decreasing = TRUE) %>% head(5)
+```
+
+<br>
+
+```{r echo=TRUE}
+frecuencia_items <- itemFrequency(x = Adult, type = "absolute") 
+frecuencia_items %>% sort(decreasing = TRUE) %>% head(5)
+```
+
+<br>
+
+#### Frecuencia de itemsets
+
+Si no se aclara el valor del soporte dentro del argumento parameter, se toma por default un soporte de 0.1 para considerarlo un itemset frecuente.
+```{r echo=TRUE}
+itemsets <- apriori(data = Adult, parameter = list( minlen = 9, maxlen = 13,target = "frequent itemset"))
+summary(itemsets)
+inspect(itemsets)
+
+itemsets_2 <- apriori(data = Adult, parameter = list( minlen = 4, maxlen = 13,target = "frequent itemset"))
+summary(itemsets_2)
+DiezDeMayorSoporte<-sort(itemsets_2, by = "support", decreasing = TRUE)[1:10]
+inspect(DiezDeMayorSoporte)
+
+itemsets_3 <- apriori(data = Adult, parameter = list( minlen = 6, maxlen = 13,target = "frequent itemset"))
+summary(itemsets_3)
+DiezDeMayorSoporte_3<-sort(itemsets_3, by = "support", decreasing = TRUE)[1:10]
+inspect(DiezDeMayorSoporte_3)
+
+```
+
+<br>
+
+#### Filtrado de items
+
+```{r echo=TRUE}
+itemsets_workPriv <- arules::subset(itemsets_3, subset = items %in% "workclass=Private") 
+itemsets_workPriv
+itemsets_workPriv_10<-sort(itemsets_workPriv, by = "support", decreasing = TRUE)[1:10]
+inspect(itemsets_workPriv_10)
+
+```
+
+```{r echo=TRUE}
+itemsets_workPriv_full <- arules::subset(itemsets, subset = items %ain% c("workclass=Private", "hours-per-week=Full-time"))
+itemsets_workPriv_full
+
+itemsets_workPriv_male <- arules::subset(itemsets, subset = items %ain% c("workclass=Private", "sex=Male"))
+itemsets_workPriv_male
+
+inspect(itemsets_workPriv_male)
+```
+
+<br>
+
+#### Generación de reglas
+
+```{r echo=TRUE}
+soporte <- 24421/dim(Adult)[1]# 50% 
+reglas <- apriori(data = Adult, parameter = list(support = soporte, minlen = 2, maxlen = 13, confidence = 0.70,target = "rules"))
+
+summary(reglas)
+
+
+inspect(sort(x = reglas, decreasing = TRUE, by = "confidence"))
+
+inspect(sort(x = reglas, decreasing = TRUE, by = "lift"))
+
+```
+
+<br>
+
+#### Algunas métricas de evaluación de reglas
+
+
+```{r echo=TRUE}  
+metricas <- interestMeasure(reglas, measure = c("lift","coverage", "fishersExactTest"), transactions = Adult) 
+metricas
+
+#para ver más métricas consultar:?interestMeasure
+
+quality(reglas) 
+
+```
+<br>
+
+
+#### Reglas con un determinado consecuente (rhs)
+
+```{r echo=TRUE}
+soporte <- 100 / dim(Adult)[1] 
+reglas_2 <- apriori(data = Adult, parameter = list(support = soporte, minlen = 2, maxlen = 13, confidence = 0.70,target = "rules"), appearance = list(rhs = "income=large"))
+summary(reglas_2)#set of 396 rules
+```
+
+<br>
+
+Observamos las 10 primeras reglas más confiables:
+```{r echo=TRUE}
+inspect(sort(x = reglas_2, decreasing = TRUE, by = "confidence")[1:10])
+
+```
+
+<br>
+
+#### Restricción de reglas redundantes
+
+```{r echo=TRUE}
+reglas_2_a <- reglas_2[is.redundant(x = reglas_2, measure = "confidence")] 
+reglas_2_a#set of 312 rules
+summary(reglas_2_a)
+```
+<br>
+
+A continuación se muestran las 10 reglas de mayor confianza.
+```{r echo=TRUE}
+inspect(sort(x = reglas_2_a, decreasing = TRUE, by = "confidence")[1:10])
+
+# otra forma de obtenerlo 
+as(reglas_2_a, "data.frame") %>% arrange(desc(confidence)) %>% head(10) %>% pull(rules)
+
+```
+<br>
+
+
+#### Filtrado de reglas por antecedentes (lhs)
+```{r echo=TRUE}
+reglas_lhs <- subset(x = reglas_2_a, subset = lhs %ain% c("workclass=Private", "sex=Male")) 
+inspect(sort(x = reglas_lhs, decreasing = TRUE, by = "confidence"))
+
+
+```
+
+<br>
+
+<br>
+
+<br>
+
+## <span style="color:darkred">Clustering</span>
+
+<br>
+<br>
+
+Consideramos los datos en R de arrestos en USA en 1973 causados por asesinatos, asaltos y violaciones. Se presentan en tasas por cada 100000 residentes y por estado. Además se incluye el porcentaje de población urbana.
+```{r echo=TRUE}
+data(USArrests) 
+datos <- scale(USArrests) 
+head(datos)
+```
+Observar que estandarizamos los datos usando el comando scale.
+
+<br>
+
+### <span style="color:darkred">Métodos jerárquicos:</span>
+<br>
+
+#### Matriz de distancias euclídeas
+
+<br>
+```{r echo=TRUE}
+mat_dist <- dist(x = datos, method = "euclidean") 
+```
+<br>
+
+#### Dendrogramas
+
+```{r echo=TRUE}
+hc_complete <- hclust(d = mat_dist, method = "complete") 
+hc_average <- hclust(d = mat_dist, method = "average")
+hc_single <- hclust(d = mat_dist, method = "single")
+hc_ward <- hclust(d = mat_dist, method = "ward.D2")
+```
+```{r echo=TRUE}
+plot(hc_ward )
+rect.hclust(hc_ward, k=4, border="red")
+grupos<-cutree(hc_ward,k=3)
+split(rownames(datos),grupos)
+```
+<br>
+
+#### Coeficiente de correlación cofenética
+
+```{r echo=TRUE}
+cor(x = mat_dist, cophenetic(hc_complete))
+cor(x = mat_dist, cophenetic(hc_average))
+cor(x = mat_dist, cophenetic(hc_single))
+cor(x = mat_dist, cophenetic(hc_ward))
+```
+
+<br>
+
+#### **Clustering usando el paquete factoextra**
+
+```{r include=FALSE}
+#recordar instalar los paquetes si no están instalados aún
+library(factoextra)
+library(dplyr)
+
+```
+<br>
+
+#### Dendrograma y representación gráfica de la segmentación en dos dimensiones
+```{r echo=TRUE}
+datos2 <- USArrests 
+hc_completo <- datos2 %>% scale() %>% dist(method = "euclidean") %>% 
+  hclust(method = "complete") 
+
+fviz_dend(x = hc_completo, k = 2, cex = 0.6) + 
+  geom_hline(yintercept = 5.5, linetype = "dashed")
+
+fviz_cluster(object = list(data = datos2, cluster = cutree(hc_completo, k = 2)), ellipse.type = "convex", repel = TRUE, show.clust.cent = FALSE) + 
+  theme_bw()
+
+fviz_dend(x = hc_completo, k = 4, cex = 0.6) + 
+  geom_hline(yintercept = 3.5, linetype = "dashed")
+
+fviz_cluster(object = list(data = datos2, cluster = cutree(hc_completo, k = 4)), ellipse.type = "convex", repel = TRUE, show.clust.cent = FALSE) + 
+  theme_bw()
+```
+
+<br>
+
+#### Selección de número óptimo de clusters
+
+<br>
+
+**Método de Elbow**
+```{r echo=TRUE}
+fviz_nbclust(x = datos2, FUNcluster = hcut,hc_method ="ward.D2",stand=TRUE, method = "wss", 
+             diss = dist(datos, method = "euclidean"))
+fviz_nbclust(x = datos2, FUNcluster = hcut,hc_method ="average",stand=TRUE, method = "wss", 
+             diss = dist(datos, method = "euclidean"))
+```
+
+<br>
+
+**Coeficiente silhouette**
+```{r echo=TRUE}
+fviz_nbclust(x = datos2, FUNcluster = hcut,hc_method ="ward.D2",stand=TRUE, method = "silhouette", 
+             diss = dist(datos, method = "euclidean"))
+fviz_nbclust(x = datos2, FUNcluster = hcut,hc_method ="average",stand=TRUE, method = "silhouette", 
+             diss = dist(datos, method = "euclidean"))
+```
+
+<br>
+
+**Método del estadístico gap**
+```{r echo=TRUE}
+fviz_nbclust(x = datos, FUNcluster = hcut,hc_method ="ward.D2", method = "gap_stat", 
+             diss = dist(datos, method = "euclidean"))
+fviz_nbclust(x = datos, FUNcluster = hcut,hc_method ="average", method = "gap_stat", 
+             diss = dist(datos, method = "euclidean"))
+```
+
+<br>
+
+### <span style="color:darkred">K-means:</span>
+
+<br>
+ 
+#### Selección de número óptimo de clusters
+
+<br>
+
+**Método de Elbow**
+ 
+```{r echo=TRUE}
+fviz_nbclust(x = datos, FUNcluster = kmeans, method = "wss", 
+             diss = dist(datos, method = "euclidean")) + 
+  geom_vline(xintercept = 4, linetype = 2)
+```
+
+<br>
+
+**Coeficiente silhouette**
+```{r echo=TRUE}
+fviz_nbclust(x = datos, FUNcluster = kmeans, method = "silhouette", 
+             diss = dist(datos, method = "euclidean"))
+```
+<br>
+
+**Método del estadístico gap**
+
+```{r echo=TRUE}
+fviz_nbclust(x = datos, FUNcluster = kmeans, method = "gap_stat", 
+             diss = dist(datos, method = "euclidean"))
+```
+
+<br>
+
+#### Segmentación en 4 grupos
+
+```{r echo=TRUE}
+set.seed(123) 
+km_clusters <- kmeans(x = datos, centers = 4, nstart = 25)
+names(km_clusters)
+split(rownames(datos),km_clusters$cluster)
+```
+
+<br>
+
+#### Representación gráfica de la segmentación en dos dimensiones
+
+```{r echo=TRUE}
+fviz_cluster(object = km_clusters, data = datos, show.clust.cent = TRUE, ellipse.type = "euclid", star.plot = TRUE, repel = TRUE) + 
+  theme_bw() + 
+  theme(legend.position = "none")
+
+```       
+
+### <span style="color:darkred">Ejemplo con variables categóricas</span>
+
+<br>
+<br>
+
+Utilizamos el dataset provisto por R de hongos clasificados como comestibles y venenosos (o no recomendables para consumo). La idea es ver si es posible separar ambos grupos obviamente sin valernos de la columna de la clase, y en ese caso entender qué características diferencian ambos segmentos.
+
+```{r echo=TRUE}
+library(cba)
+library(vegan)
+data("Mushroom")
+head(Mushroom)
+dim(Mushroom)
+colnames(Mushroom)
+```
+
+Para simplificar el análisis, seleccionamos algunas variables de interés, ya que al aplicar el comando dummy se multiplican las variables del dataset binario.
+
+```{r echo=TRUE}
+mush<-Mushroom[,c(1:6,19:23)]
+summary(mush)
+xx <- as.dummy(mush[-1])
+dim(xx)
+head(xx)
+```
+<br>
+
+Notar que en este caso, al tratarse de variables categóricas vamos a binarizar las variables, para luego utilizar la distancia de Jaccard, muy últil para datos donde las columnas representan la ausencia o presencia de una determinada característica. Es por esto que no se requiere ningún tipo de normalización posterior.
+
+<br>
+
+```{r echo=TRUE}
+jac<-vegdist(xx, method = "jaccard")
+hc_ward <- hclust(d = jac, method = "ward.D2")
+plot(hc_ward)
+rect.hclust(hc_ward, k=2, border="red")
+```
+
+Calculamos las proporciones de comestibles y venenosos en cada grupo a modo de validación, pero la idea es que justamente, en los problemas de clustering no hay una variable de clase, sino que se intenta a partir de otras características entender si es posible separar en grupos diferentes. Luego, de acuerdo a esas caracteísticas y si se observan diferencias claras, se puede definir una etiqueta de clase. Acá estamos haciendo trampa, pero es para ver que la metodología separa correctamente en dos segmentos.
+
+```{r echo=TRUE}
+grupos<-cutree(hc_ward,k=2)
+gr<-split(mush[1],grupos)
+table(gr[[1]])
+table(gr[[2]])
+```
+
+Analizamos las características de cada grupo para determinar dónde se observa la mayoría de las diferencias.
+
+```{r echo=TRUE}
+sp<-split(mush,grupos)
+edi<-sp[[1]]
+poi<-sp[[2]]
+summary(edi)
+summary(poi)
+```     
+     
